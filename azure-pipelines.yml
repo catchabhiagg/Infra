@@ -1,0 +1,84 @@
+trigger:
+- main
+pool: Infraagent
+stages:
+- stage: precommit
+  displayName: pre-commit
+  jobs:
+  - job: terraforminitvalidate
+    displayName: terraform init and validate 
+    steps:
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: 'latest'
+    - task: TerraformTask@5
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Env/dev'
+        backendServiceArm: 'Infra'
+        backendAzureRmStorageAccountName: 'abhishekaggsa'
+        backendAzureRmContainerName: 'statefile'
+        backendAzureRmKey: 'dev.terraform.tfstate'
+    - task: TerraformTask@5
+      displayName: terraform-validate
+      inputs:
+        provider: 'azurerm'
+        command: 'validate'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Env/dev'
+    - task: TerraformTask@5
+      displayName: terraform-fmt
+      inputs:
+        provider: 'azurerm'
+        command: 'custom'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Env/dev'
+        outputTo: 'console'
+        customCommand: 'fmt'
+        environmentServiceNameAzureRM: 'Infra'
+    - task: TerraformTask@5
+      displayName: terraform-plan
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Env/dev'
+        environmentServiceNameAzureRM: 'Infra'
+- stage: scanning
+  displayName: tflint&tfsec scanning
+  jobs:
+  - job: scanningtflint
+    displayName: terraform tflint
+    steps:
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: 'winget install terraformlinters.tflint --accept-source-agreements --accept-package-agreements; exit 0'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Env/dev'
+  - job: scanningtfsec
+    displayName: terraform tfsec
+    steps:
+    - task: tfsec@1
+      inputs:
+        version: 'v1.26.0'
+        dir: '$(System.DefaultWorkingDirectory)/Env/dev'
+- stage: Terraformapply
+  displayName: init and Apply
+  jobs:
+  - job: terraforminitapply
+    displayName: terraform init and apply 
+    steps:
+    - task: TerraformTask@5
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Env/dev'
+        backendServiceArm: 'Infra'
+        backendAzureRmResourceGroupName: 'rg-abhishekaggarwal'
+        backendAzureRmStorageAccountName: 'abhishekaggsa'
+        backendAzureRmContainerName: 'statefile'
+        backendAzureRmKey: 'dev.terraform.tfstate'
+    - task: TerraformTask@5
+      inputs:
+        provider: 'azurerm'
+        command: 'apply'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Env/dev'
+        environmentServiceNameAzureRM: 'Infra'
